@@ -14,7 +14,7 @@ import segmentation_models
 import tensorflow as tf
 from tensorflow.keras.backend import shape
 from tensorflow.keras.layers import Dropout
-from tensorflow.keras.models import load_model
+from keras.models import load_model
 from tqdm import tqdm
 
 
@@ -150,9 +150,8 @@ class NetPredictor(Predictor):
             # see https://github.com/qubvel/segmentation_models/issues/153
             # see https://stackoverflow.com/questions/54835331/how-do-i-load-a-keras-saved-model-with-custom-optimizer
             print(f"Loading Model: {network_path}")
-            model = load_model(str(network_path / "model.h5"), compile=False,
-                               custom_objects={'swish': tf.nn.swish, 'FixedDropout': FixedDropout})
-
+            model = load_model(str(network_path / "model.h5"), compile=False)
+            #  custom_objects={'swish': tf.nn.swish, 'FixedDropout': FixedDropout}
         self._preprocess = segmentation_models.get_preprocessing(
             meta["backbone"])
 

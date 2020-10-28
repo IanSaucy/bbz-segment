@@ -6,11 +6,11 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-tensorflow = "==2.1.1"
-segmentation-models = "*"
+tensorflow = "==1.15.2"
 opencv-python = ">=4.4"
 tqdm = "*"
-keras = "==2.3.1"
+keras = "~=2.3.1"
+segmentation-models = "~=1.0.1"
 
 [requires]
 python_version = "3.7"
