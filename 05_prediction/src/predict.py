@@ -8,12 +8,9 @@ import json
 import cv2
 import math
 import re
-import os
 import itertools
 import enum
-import scipy
 import PIL.Image
-import collections
 import logging
 
 from pathlib import Path
