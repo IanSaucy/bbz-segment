@@ -43,7 +43,9 @@ class Prediction:
 
 def colorize(labels: np.array) -> PIL.Image:
     """"
-    Build a color image based on the labels of this image.
+    Build a color image based on the labels of this image. Essentially converts the labels
+    such as 0, 1, 2, or 3(representing different types of separators of this image) to RGB colors
+    for easier output and readability
     Args:
         labels (): The labels to be written over the original image
     Returns:
