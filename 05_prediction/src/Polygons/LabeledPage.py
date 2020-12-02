@@ -6,7 +6,7 @@ import numpy as np
 
 from Polygons.Constants import ExpectedValues
 from Polygons.Labels import Labels
-from Polygons.Point import Point, VerticalSeparator, HorizontalSeparator
+from Polygons.Point import Point, VerticalSeparator, HorizontalSeparator, Article, Box
 import cv2 as cv
 
 
@@ -22,19 +22,155 @@ class LabeledPage:
     image sizes and resolutions. It also has a large affect on the performance of the search function
     """
     _separator_buffer_range: int = 150
-
+    """
+    This is the max width(really height) we expect a horizontal separator to have. 
+    This value enables various parts of the program to now double count separators twice
+    if they have a width/height more than 1 pixel. 
+    
+    """
     _horizontal_expected_width: int = 35
 
     def __init__(self, img: np.array, original_size: Tuple[int, int]):
         self.img = img
         # Create single labeled copies of input image
+        # Resize image while also reducing down to a single label
         self._only_vertical_labels = cv.resize(self._reduce_to_single_label(Labels.Vert), original_size,
                                                interpolation=cv.INTER_AREA)
         self._only_horizontal_labels = cv.resize(self._reduce_to_single_label(Labels.Horz), original_size,
                                                  interpolation=cv.INTER_AREA)
+        self.original_size = original_size
 
-    def _find_horz_sep_in_range(self, start_col: int, end_col: int, start_row: int, end_row: int) -> List[
-        Optional[HorizontalSeparator]]:
+    def find_article_boxes(self, vert_sep: List[VerticalSeparator]) -> List[Article]:
+        """
+        A function to take a list of Vertical separators and identify the articles in each image.
+
+        In this version of the code an article is defined as the space spanned between two horizontal
+        separators across one or more columns(vertical separators). This means that an article
+        could be some combination of the following:
+
+            1. Contained within a given column
+            2. Starting in one column and "flowing" into the next until it hits a separator
+            3. Starting in a column and being implicitly ended by the end of the page in the last column
+                the combination of both of these will force end an article even if no horizontal separator
+                was detected.
+
+        See the article class for more info, but a given article can be made up of one or more Boxes which are a series
+        of (row,col) coordinates that define rectangle.
+
+        ! Assumptions:
+
+        This function makes several assumptions when trying to identify articles. A hopefully exhaustive list is below:
+            - There are at least two vertical separators
+            -
+
+        Args:
+            vert_sep (): A list of vertical separators
+
+        Returns: A list of all identified articles
+
+        """
+        # Add soft separator that is the start and end of the image
+        most_top_point, most_bot_point = self._find_max_vert_sep_height(vert_sep)
+        vert_sep.append(VerticalSeparator(Point(most_top_point, 0), Point(most_bot_point, 0)))
+        vert_sep.append(VerticalSeparator(Point(most_top_point, self.original_size[0]),
+                                          Point(most_bot_point, self.original_size[0])))
+        # Super super important that the separators be sorted via columns in ascending order
+        vert_sep.sort()
+        img = self._only_horizontal_labels
+        all_articles: List[Article] = []
+        curr_article: List[Box] = []
+
+        # Starts from the 2nd separator in the list because we define a column
+        # to be the columns between two separators. Thus we need two separators!
+        for index in range(1, len(vert_sep)):
+            curr_sep = vert_sep[index]
+            prev_sep = vert_sep[index - 1]
+            # Init the top of the current box to the most top point as found previously.
+            # Basically only used when starting on a new column.
+            top_of_box = Point(most_top_point, prev_sep.top_point.col), Point(most_top_point, curr_sep.top_point.col)
+            # Sliding history of labels seen, used to avoid "double" counting horizontal separators
+            sliding_history = []
+            # Scan across all rows in identified range.
+            # Cannot scan across the entire image since there are horizontal separators that are not related to
+            # a given article. Such as the title info etc.
+            for row in range(most_top_point, most_bot_point):
+                if Labels.Horz in img[row,
+                                  prev_sep.top_point.col:curr_sep.top_point.col] and Labels.Horz not in sliding_history:
+                    # Use the current row and the column of the bottom point of the input separators
+                    temp_bot_box = Point(row, prev_sep.bottom_point.col), Point(row, curr_sep.bottom_point.col)
+                    temp_box = Box(top_of_box[0], top_of_box[1], temp_bot_box[0], temp_bot_box[1])
+                    curr_article.append(temp_box)
+                    all_articles.append(Article(curr_article))
+                    # Update running top of box for the next article
+                    top_of_box = temp_bot_box
+                    # Clear the current article since we're starting a new article given that we've found
+                    # a horizontal separator.
+                    curr_article = []
+                    sliding_history.append(Labels.Horz)
+                elif row >= most_bot_point - 1:
+                    # Finish off box since we're at the end of the current column within two seps
+                    temp_bot_box = Point(row, prev_sep.bottom_point.col), Point(row, curr_sep.bottom_point.col)
+                    temp_box = Box(top_of_box[0], top_of_box[1], temp_bot_box[0], temp_bot_box[1])
+                    curr_article.append(temp_box)
+                else:
+                    sliding_history.append(-1)
+                # Pruning the sliding history
+                while len(sliding_history) > self._horizontal_expected_width:
+                    sliding_history.pop(0)
+
+            if index == len(vert_sep) - 1 and len(curr_article) > 0:
+                # Blindly finish off this article since we're all done on this image
+                temp_bot_box = Point(most_bot_point, prev_sep.bottom_point.col), Point(most_bot_point,
+                                                                                       curr_sep.bottom_point.col)
+                temp_box = Box(top_of_box[0], top_of_box[1], temp_bot_box[0], temp_bot_box[1])
+                curr_article.append(temp_box)
+                all_articles.append(Article(curr_article))
+        return all_articles
+
+    def _find_max_vert_sep_height(self, vert_sep: List[VerticalSeparator]) -> Tuple[int, int]:
+        """
+        Takes a list of vertical separators and finds the the (row,col) point for both extremes, both "highest" and "lowest"
+        "highest" and "lowest" is a bit of a confusing term here given that a separator that is "higher" physically on an image
+        will have a lower row number since coordinates start at the top left.
+
+        Args:
+            vert_sep (): A list of vertical separators
+
+        Returns: A tuple representing the two extrema values.
+
+        """
+        most_top_sep_cord = vert_sep[0].top_point.row
+        most_bot_sep_cord = vert_sep[0].bottom_point.row
+        for sep in vert_sep:
+            if sep.top_point.row < most_top_sep_cord:
+                most_top_sep_cord = sep.top_point.row
+            if sep.bottom_point.row > most_bot_sep_cord:
+                most_bot_sep_cord = sep.bottom_point.row
+        return most_top_sep_cord, most_bot_sep_cord
+
+    def _find_horz_sep_in_range(self, start_col: int, end_col: int, start_row: int, end_row: int) \
+            -> List[Optional[HorizontalSeparator]]:
+        """
+        ! Not Used but might be helpful
+
+        Finds all the horizontal separators in the specified range, a combination of col and row.
+        Searches across the image data stored on the instance of the object, scanning over the filtered
+        image that only contains horizontal image labels.
+
+        It defines a separator as ANY pixel(some [row,col] value) containing the horizontal separator label.
+        In addition, this separator will span the entire input range of columns.
+
+        It attempts to not "double count" separators that have a width greater than a single pixel(most) by
+        keeping a history and not counting a found separator if there is still a separator in the history.
+        Args:
+            start_col (): The column where the search should start, also the start of any separators that are created
+            end_col (): The column where the search should end, also the end of any separators that are created
+            start_row (): What row to start searching on(inclusive)
+            end_row (): What row to stop searching on (exclusive)
+
+        Returns:
+            A list of HorizontalSeparators representing the identified horizontal separators
+        """
         if self._only_vertical_labels.shape[1] < end_col:
             raise IndexError
         if start_col < 0:
@@ -43,18 +179,40 @@ class LabeledPage:
         horz_sep_list: List[HorizontalSeparator] = []
         label_history: List[int] = []
         for row in range(start_row, end_row):
+            # Checks if within the range there is a horizontal label. In addition, and most importantly
+            # there is not a label in the history -- this makes sure we don't "double count" separators
+            # since they're of a width greater than 1 pixel.
             if Labels.Horz in img[row, start_col:end_col] and Labels.Horz not in label_history:
+                # TODO: Maybe it should be more restrictive than just a single pixel being defined as a separator
+                # We just define the separator as the first row that contains a horizontal separator pixel
+                # which means it's possible there is some separator below this designation(not a problem)
                 horz_sep_list.append(HorizontalSeparator(Point(row, start_col), Point(row, end_col)))
                 label_history.append(Labels.Horz)
             else:
+                # This value does not matter much. This is just handy to spot bugs
                 label_history.append(-1)
             # This makes sure we don't input the same separator multiple times since it has a width greater
-            # a single pixel
+            # a single pixel. See note above
             if len(label_history) > self._horizontal_expected_width:
                 label_history.pop(0)
+
         return horz_sep_list
 
     def find_all_vertical_sep(self) -> List[VerticalSeparator]:
+        """
+        A function to find all the vertical separators in the image, attempting to find the true start of each(top and bottom of image)
+
+        Once the top and bottom of vertical separators are found it attempts to match them up by identifying a given
+        bottom and top separator that are within a specified range of columns from each other.
+
+        Verifies that the number of top and bottom points(representing the start and end of some separators) are equal
+        and that the final value of separators is the same as the number of separator points previously identified.
+
+
+        """
+        # TODO This really should be broken down into some smaller bits
+        # List of points representing the top and bottom of identified separators.
+        # ! Slow function call!
         top_of_separators: List[Point] = self._find_top_of_vert_sep()
         bot_of_separators: List[Point] = self._find_bot_of_vert_sep()
         # Make sure both have the same number of points
@@ -72,25 +230,44 @@ class LabeledPage:
                     # These are a match
                     complete_vertical_separator.append(VerticalSeparator(top_point, bot_point))
         assert len(complete_vertical_separator) == len(bot_of_separators)
-        # Now we add "soft" left and right separators that are just the edge of the images
-        
         complete_vertical_separator.sort()
         return complete_vertical_separator
 
     def _find_bot_of_vert_sep(self) -> List[Point]:
+        """
+        Searches the vertical image data stored on this object for the "top" of all vertical separators.
+
+        Always tries to identify the top most pixel that makes up some separator. Whatever the top most
+        pixel is will be used to define the start point of a given separator. In other words, the width of the
+        separator is not factored into the data returned.
+
+        A buffer is set around any given separator, this buffer prevents double counting a given separator
+        due to its potential width. This also means that there is a minimum distance that any two separators must have
+        to have detected as two separate separators in place of a single separator.
+
+        Returns: A list of Points that represent the top of all identified separators
+
+        """
+        # Handy local variable
         img = self.only_vertical_labels
-        # height, width = np.shape
+        # height, width = np.shape - Just a reminder
+        # Set a max number of rows to be searched. In other words, don't search beyond this row
         top_search_limit: int = img.shape[0] // 3
         expected_number_seps: int = self._find_number_vert_sep(self._only_vertical_labels)
         number_found_seps: int = 0
+        # This acts as our "buffer keeper" anything in this set is already part of some other
+        # separator.
         found_separator_ranges = set()
         found_separators: List[Point] = []
         for row in reversed(range(top_search_limit, img.shape[0])):
             if number_found_seps == expected_number_seps:
+                # stop searching once we found the number of separators we expected to see.
                 break
+            # Scan over all columns of the input image
             for col in range(img.shape[1]):
                 if col in found_separator_ranges:
                     # This is a separator we've already seen
+                    # TODO: Come up with a better way to skip ranges that are already part of a separator
                     continue
                 if img[row, col] == Labels.Vert:
                     # This is a separator!
@@ -103,6 +280,22 @@ class LabeledPage:
         return found_separators
 
     def _find_top_of_vert_sep(self) -> List[Point]:
+        """
+        Searches the vertical image data stored on this object for the "top" of all vertical separators.
+
+        ! See the related _find_bot_of_vert_sep() for more detailed comments
+
+        Always tries to identify the top most pixel that makes up some separator. Whatever the top most
+        pixel is will be used to define the start point of a given separator. In other words, the width of the
+        separator is not factored into the data returned.
+
+        A buffer is set around any given separator, this buffer prevents double counting a given separator
+        due to its potential width. This also means that there is a minimum distance that any two separators must have
+        to have detected as two separate separators in place of a single separator.
+
+        Returns: A list of Points that represent the top of all identified separators
+
+        """
         img = self.only_vertical_labels
         bottom_search_limit: int = img.shape[0] // 2
         expected_number_seps: int = self._find_number_vert_sep(self._only_vertical_labels)
@@ -150,9 +343,8 @@ class LabeledPage:
         The number found is checked against a sane max number expected value as a rudimentary
         sanity check.
         Args:
-            (x,y) coordinate should either be a vertical separator or the integer value `0`.
-            In other words, it expects that the input image is binary, only containing two possible
-            values at an (x,y) coordinate.
+            input_image: (): Input image in the form of a numpy array containing only
+            vertical separator labels.
 
         Returns: The number of vertical separators found
 

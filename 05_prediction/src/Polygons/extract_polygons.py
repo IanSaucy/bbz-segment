@@ -1,14 +1,35 @@
-import numpy as np
+from random import randrange
+from typing import List, Tuple
 
+import numpy as np
+import cv2 as cv
 from Polygons.LabeledPage import LabeledPage
+from Polygons.Point import Article
+
+
+def random_color() -> Tuple[int, int, int]:
+    return randrange(0, 255), randrange(0, 255), randrange(0, 255)
+
 
 labels = np.load('./8k71pf49w_8k71pf51x-labels.sep.npy')
 
 page = LabeledPage(labels, (3672, 5298))
-res = page._find_horz_sep_in_range(860, 1540, 240, 5279)
-print(res)
-#res = page.find_all_vertical_sep()
-#print(res)
+vert_seps = page.find_all_vertical_sep()
+articles: List[Article] = page.find_article_boxes(vert_seps)
+source_img = cv.imread('./8k71pf49w_8k71pf51x.jpg')
+for index, article in enumerate(articles):
+    color = random_color()
+    #img = cv.imread('./8k71pf49w_8k71pf51x.jpg')
+    for box in article.get_boxes():
+        cv.rectangle(source_img, (box.top_left.col, box.top_left.row), (box.bot_right.col, box.bot_right.row),
+                     color, 5)
+    #cv.imwrite(f'annotated_{index}.jpg', img)
+cv.imwrite(f'annotated.jpg', source_img)
+
+# res = page._find_horz_sep_in_range(860, 1540, 240, 5279)
+print(articles)
+# res = page.find_all_vertical_sep()
+# print(res)
 
 # Remove everything but vertical separators
 # labels_vert = reduce_to_single_label(labels, VERT)

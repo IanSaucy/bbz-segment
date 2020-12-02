@@ -1,7 +1,7 @@
 from collections import namedtuple
 from enum import Enum, auto
 from functools import total_ordering
-from typing import Optional, NamedTuple
+from typing import Optional, NamedTuple, List
 
 
 class SeparatorTypes(Enum):
@@ -55,6 +55,27 @@ class VerticalSeparator:
     @bottom_point.setter
     def bottom_point(self, value):
         self._bottom_point = value
+
+
+class Box(NamedTuple):
+    top_left: Point
+    top_right: Point
+    bot_left: Point
+    bot_right: Point
+
+
+class Article:
+    def __init__(self, boxes: List[Box]):
+        self._boxes = boxes
+
+    def __str__(self):
+        return f'{self.get_boxes()}'
+
+    def add_box(self, box: Box):
+        self._boxes.append(box)
+
+    def get_boxes(self):
+        return self._boxes
 
 
 class HorizontalSeparator:
