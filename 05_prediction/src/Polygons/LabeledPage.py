@@ -26,9 +26,14 @@ class LabeledPage:
     This is the max width(really height) we expect a horizontal separator to have. 
     This value enables various parts of the program to now double count separators twice
     if they have a width/height more than 1 pixel. 
-    
     """
     _horizontal_expected_width: int = 35
+
+    """
+    This is the number of pixel buffer that is added to the top and bottom separators when
+    drawing bounding boxes for identified article regions.
+    """
+    _start_end_page_buffer: int = 25
 
     def __init__(self, img: np.array, original_size: Tuple[int, int]):
         self.img = img
@@ -39,7 +44,7 @@ class LabeledPage:
         self._only_horizontal_labels = cv.resize(self._reduce_to_single_label(Labels.Horz), original_size,
                                                  interpolation=cv.INTER_AREA)
         self.original_size = original_size
-
+    
     def find_article_boxes(self, vert_sep: List[VerticalSeparator]) -> List[Article]:
         """
         A function to take a list of Vertical separators and identify the articles in each image.
@@ -69,11 +74,16 @@ class LabeledPage:
         Returns: A list of all identified articles
 
         """
+        # Add a small buffer to handle text that might extend beyond the start or end of a vertical separator
+        true_most_top_point, true_most_bot_point = self._find_max_vert_sep_height(vert_sep)
+        buffed_most_top_point, buffed_most_bot_point = true_most_top_point - self._start_end_page_buffer, \
+                                                       true_most_bot_point + self._start_end_page_buffer
+        # most_bot_point = most_bot_point + self._start_end_page_buffer
+        # most_top_point = most_top_point - self._start_end_page_buffer
         # Add soft separator that is the start and end of the image
-        most_top_point, most_bot_point = self._find_max_vert_sep_height(vert_sep)
-        vert_sep.append(VerticalSeparator(Point(most_top_point, 0), Point(most_bot_point, 0)))
-        vert_sep.append(VerticalSeparator(Point(most_top_point, self.original_size[0]),
-                                          Point(most_bot_point, self.original_size[0])))
+        vert_sep.append(VerticalSeparator(Point(true_most_top_point, 0), Point(true_most_bot_point, 0)))
+        vert_sep.append(VerticalSeparator(Point(true_most_top_point, self.original_size[0]),
+                                          Point(true_most_bot_point, self.original_size[0])))
         # Super super important that the separators be sorted via columns in ascending order
         vert_sep.sort()
         img = self._only_horizontal_labels
@@ -87,13 +97,14 @@ class LabeledPage:
             prev_sep = vert_sep[index - 1]
             # Init the top of the current box to the most top point as found previously.
             # Basically only used when starting on a new column.
-            top_of_box = Point(most_top_point, prev_sep.top_point.col), Point(most_top_point, curr_sep.top_point.col)
+            top_of_box = Point(buffed_most_top_point, prev_sep.top_point.col), Point(buffed_most_top_point,
+                                                                                     curr_sep.top_point.col)
             # Sliding history of labels seen, used to avoid "double" counting horizontal separators
             sliding_history = []
             # Scan across all rows in identified range.
             # Cannot scan across the entire image since there are horizontal separators that are not related to
             # a given article. Such as the title info etc.
-            for row in range(most_top_point, most_bot_point):
+            for row in range(true_most_top_point, true_most_bot_point):
                 if Labels.Horz in img[row,
                                   prev_sep.top_point.col:curr_sep.top_point.col] and Labels.Horz not in sliding_history:
                     # Use the current row and the column of the bottom point of the input separators
@@ -107,9 +118,11 @@ class LabeledPage:
                     # a horizontal separator.
                     curr_article = []
                     sliding_history.append(Labels.Horz)
-                elif row >= most_bot_point - 1:
+                elif row >= true_most_bot_point - 1:
                     # Finish off box since we're at the end of the current column within two seps
-                    temp_bot_box = Point(row, prev_sep.bottom_point.col), Point(row, curr_sep.bottom_point.col)
+                    temp_bot_box = Point(row + self._start_end_page_buffer, prev_sep.bottom_point.col), Point(
+                        row + self._start_end_page_buffer,
+                        curr_sep.bottom_point.col)
                     temp_box = Box(top_of_box[0], top_of_box[1], temp_bot_box[0], temp_bot_box[1])
                     curr_article.append(temp_box)
                 else:
@@ -120,8 +133,8 @@ class LabeledPage:
 
             if index == len(vert_sep) - 1 and len(curr_article) > 0:
                 # Blindly finish off this article since we're all done on this image
-                temp_bot_box = Point(most_bot_point, prev_sep.bottom_point.col), Point(most_bot_point,
-                                                                                       curr_sep.bottom_point.col)
+                temp_bot_box = Point(buffed_most_bot_point, prev_sep.bottom_point.col), Point(buffed_most_bot_point,
+                                                                                              curr_sep.bottom_point.col)
                 temp_box = Box(top_of_box[0], top_of_box[1], temp_bot_box[0], temp_bot_box[1])
                 curr_article.append(temp_box)
                 all_articles.append(Article(curr_article))

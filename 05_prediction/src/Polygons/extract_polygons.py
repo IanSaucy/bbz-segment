@@ -19,11 +19,13 @@ articles: List[Article] = page.find_article_boxes(vert_seps)
 source_img = cv.imread('./8k71pf49w_8k71pf51x.jpg')
 for index, article in enumerate(articles):
     color = random_color()
-    #img = cv.imread('./8k71pf49w_8k71pf51x.jpg')
+    img = cv.imread('./8k71pf49w_8k71pf51x.jpg')
     for box in article.get_boxes():
         cv.rectangle(source_img, (box.top_left.col, box.top_left.row), (box.bot_right.col, box.bot_right.row),
                      color, 5)
-    #cv.imwrite(f'annotated_{index}.jpg', img)
+        cv.rectangle(img, (box.top_left.col, box.top_left.row), (box.bot_right.col, box.bot_right.row),
+                     color, 5)
+    cv.imwrite(f'annotated_{index}.jpg', img)
 cv.imwrite(f'annotated.jpg', source_img)
 
 # res = page._find_horz_sep_in_range(860, 1540, 240, 5279)
