@@ -25,6 +25,11 @@ class Prediction:
         return self._labels
 
     @property
+    def labels_np(self):
+        "Return labels as a numpy array"
+        return np.asarray(self._labels)
+
+    @property
     def classes(self):
         return self._classes
 
@@ -39,6 +44,17 @@ class Prediction:
 
         """
         colorize(self._labels).save(path)
+
+    def save_labels_array(self, path):
+        """
+        Saves the label 2D array to a numpy file
+        Args:
+            path (): Path and file name of where to save labels
+
+        Returns:
+            None
+        """
+        np.save(path, self.labels_np)
 
 
 def colorize(labels: np.array) -> PIL.Image:

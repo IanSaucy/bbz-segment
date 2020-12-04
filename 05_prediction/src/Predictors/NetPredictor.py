@@ -10,10 +10,10 @@ import segmentation_models
 from keras.engine.saving import load_model
 from tqdm import tqdm
 
-from Page import Page
+from BaseObjects.Page import Page
 from Predictors.Prediction import Prediction
 from Predictors.Predictor import Predictor
-from Tile import Tiles
+from BaseObjects.Tile import Tiles
 
 
 class NetPredictor(Predictor):
