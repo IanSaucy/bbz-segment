@@ -117,9 +117,9 @@ def bulk_generate_separators(image_dir: str, image_ext: str, output_dir: str, mo
             # In debug mode we save the actual labeled images
             model_result.save(Path(output_dir).joinpath(image_stem + '.sep.png'))
         # Save labels as a numpy array
-        output_file = Path(output_dir).joinpath(image_stem + '.sep')
+        output_file = Path(output_dir).joinpath(image_stem)
         image_success_list.append(str(output_file))
-        model_result.save_labels_array(output_file)
+        model_result.save_labels_array(output_file, page.shape)
         labeled_image_count += 1
 
     # Save the list of files we'eve generated during this round to a file

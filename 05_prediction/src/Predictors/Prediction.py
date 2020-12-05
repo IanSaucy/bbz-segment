@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import PIL.Image
 import numpy as np
 from matplotlib import pyplot as plt
@@ -45,16 +47,17 @@ class Prediction:
         """
         colorize(self._labels).save(path)
 
-    def save_labels_array(self, path):
+    def save_labels_array(self, path: str, original_dimensions: Tuple[int, int]) -> None:
         """
-        Saves the label 2D array to a numpy file
+        Saves the label 2D array to a numpy file along with image original dimensions
         Args:
             path (): Path and file name of where to save labels
-
+            original_dimensions: Original dimensions of labeled image being saved. In
+                (height, width) tuple form.
         Returns:
             None
         """
-        np.save(path, self.labels_np)
+        np.save(path, {"labels": self.labels_np, "dimensions": original_dimensions})
 
 
 def colorize(labels: np.array) -> PIL.Image:
