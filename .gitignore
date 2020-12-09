@@ -3,3 +3,7 @@
 __pycache__
 05_prediction/data/models
 
+
+*.png
+
+*.jpg
