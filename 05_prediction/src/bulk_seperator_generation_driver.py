@@ -3,10 +3,10 @@ import sys
 from pathlib import Path
 from typing import List
 
-from PIL import Image
 from tqdm import tqdm
 from colorama import Fore, Style
 import tensorflow as tf
+import cv2 as cv
 
 from BaseObjects import Page
 from Predictors.NetPredictor import NetPredictor
@@ -25,6 +25,11 @@ OUTPUT_LIST_FILE_NAME = 'generated_file_list.csv'
 Name of file where errors are saved to
 """
 OUTPUT_ERR_LIST_FILE_NAME = 'image_error_list.csv'
+"""
+Minimum size that the model supports. Slightly arbitrary at the moment, happens to be the same as 
+the dimensions of the re-sized image that is actually handed to the model. Could be changed.
+"""
+IMAGE_MIN_SIZE = (2400, 1200)
 
 
 def bulk_generate_separators(image_dir: str, image_ext: str, output_dir: str, model_dir: str, regenerate: bool = False,
@@ -97,7 +102,7 @@ def bulk_generate_separators(image_dir: str, image_ext: str, output_dir: str, mo
     for image in tqdm(file_list, 'labeling images..'):
         image_stem = Path(image).stem
         if not regenerate:
-            if Path(output_dir).joinpath(image_stem + '.sep.npy').exists():
+            if Path(output_dir).joinpath(image_stem + '.npy').exists():
                 # Output already generated, skip this one
                 continue
 
@@ -105,30 +110,52 @@ def bulk_generate_separators(image_dir: str, image_ext: str, output_dir: str, mo
         # This allows us to fail gracefully and catch image level issues and not have them
         # stop the entire operation.
         try:
-            Image.open(image)
+            img = cv.imread(str(image))
+            if img is None:
+                # Failed to load
+                raise Exception
+            if img.shape[0] < IMAGE_MIN_SIZE[0]:
+                print(f'{Fore.LIGHTYELLOW_EX} image smaller than {IMAGE_MIN_SIZE}, skipping')
+                print(Fore.RESET)
+                image_err_list.append(str(image))
+                continue
+            if img.shape[1] < IMAGE_MIN_SIZE[1]:
+                print(f'{Fore.LIGHTYELLOW_EX} image smaller than {IMAGE_MIN_SIZE}, skipping')
+                print(Fore.RESET)
+                image_err_list.append(str(image))
+                continue
         except Exception:
             print(f'{Fore.RED} could not load image {str(image)}')
             print(Fore.RESET)
             image_err_list.append(str(image))
             continue
-        page = Page.Page(image)
-        model_result = sep_predictor(page)
-        if debug:
-            # In debug mode we save the actual labeled images
-            model_result.save(Path(output_dir).joinpath(image_stem + '.sep.png'))
-        # Save labels as a numpy array
-        output_file = Path(output_dir).joinpath(image_stem)
-        image_success_list.append(str(output_file))
-        model_result.save_labels_array(output_file, page.shape)
-        labeled_image_count += 1
+
+        try:
+            page = Page.Page(image)
+            model_result = sep_predictor(page)
+            if debug:
+                # In debug mode we save the actual labeled images
+                model_result.save(Path(output_dir).joinpath(image_stem + '.sep.png'))
+            # Save labels as a numpy array
+            output_file = Path(output_dir).joinpath(image_stem)
+            image_success_list.append(str(output_file))
+            model_result.save_labels_array(output_file, page.shape, str(Path(image).name))
+            labeled_image_count += 1
+        except Exception as e:
+            print(f'{Fore.RED} an unknown error occurred while labeling image, skipping: {str(image)}')
+            print(e)
+            print(Fore.RESET)
+            image_err_list.append(str(image))
 
     # Save the list of files we'eve generated during this round to a file
     output_file_list_path = Path(output_dir).joinpath(OUTPUT_LIST_FILE_NAME)
     output_file_err_list_path = Path(output_dir).joinpath(OUTPUT_ERR_LIST_FILE_NAME)
-    with open(output_file_list_path, 'a+') as file:
-        file.writelines(image_success_list)
+    with open(output_file_list_path, 'w') as file:
+        for line in image_success_list:
+            file.write(f'{line}\n')
     with open(output_file_err_list_path, 'w') as file:
-        file.writelines(image_err_list)
-    print(f'appended saved output file list to: {output_file_list_path} ')
+        for line in image_err_list:
+            file.write(f'{line}\n')
+    print(f'saved output file list to: {output_file_list_path} ')
     print(f'saved error output file list to: {output_file_err_list_path} ')
     return labeled_image_count

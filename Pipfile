@@ -14,8 +14,8 @@ opencv-python = ">=4.4"
 tqdm = ">=4.5"
 keras = "~=2.3.1"
 segmentation-models = "~=1.0.1"
-typing-extensions = "*"
 colorama = ">=0.4.4"
+pillow = "~=8.0.1"
 
 [requires]
 python_version = "3.7"

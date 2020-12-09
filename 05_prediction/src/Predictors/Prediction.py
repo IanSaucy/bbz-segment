@@ -47,17 +47,18 @@ class Prediction:
         """
         colorize(self._labels).save(path)
 
-    def save_labels_array(self, path: str, original_dimensions: Tuple[int, int]) -> None:
+    def save_labels_array(self, path: str, original_dimensions: Tuple[int, int], input_filename: str) -> None:
         """
         Saves the label 2D array to a numpy file along with image original dimensions
         Args:
             path (): Path and file name of where to save labels
             original_dimensions: Original dimensions of labeled image being saved. In
                 (height, width) tuple form.
+            input_filename: The filename of the photo that was used to generate this labeling
         Returns:
             None
         """
-        np.save(path, {"labels": self.labels_np, "dimensions": original_dimensions})
+        np.save(path, {"labels": self.labels_np, "dimensions": original_dimensions, "filename": input_filename})
 
 
 def colorize(labels: np.array) -> PIL.Image:
