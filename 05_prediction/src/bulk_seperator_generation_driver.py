@@ -18,10 +18,6 @@ Used to check that the version of TF is what we expect. Otherwise we warn the us
 """
 TENSORFLOW_VERSION = '1.15'
 """
-The filename of the file that contains the list of all saved outputs from the model
-"""
-OUTPUT_LIST_FILE_NAME = 'generated_file_list.csv'
-"""
 Name of file where errors are saved to
 """
 OUTPUT_ERR_LIST_FILE_NAME = 'image_error_list.csv'
@@ -96,7 +92,6 @@ def bulk_generate_separators(image_dir: str, image_ext: str, output_dir: str, mo
     # Scan through provided input folder for all images
     file_list = list(Path(image_dir).glob(f'*.{image_ext}'))
     # Lists to track images that are labeled(or not)
-    image_success_list: List[str] = []
     image_err_list: List[str] = []
     # Loop over all images and perform labeling actions
     for image in tqdm(file_list, 'labeling images..'):
@@ -138,7 +133,6 @@ def bulk_generate_separators(image_dir: str, image_ext: str, output_dir: str, mo
                 model_result.save(Path(output_dir).joinpath(image_stem + '.sep.png'))
             # Save labels as a numpy array
             output_file = Path(output_dir).joinpath(image_stem)
-            image_success_list.append(str(output_file))
             model_result.save_labels_array(output_file, page.shape, str(Path(image).name))
             labeled_image_count += 1
         except Exception as e:
@@ -148,14 +142,9 @@ def bulk_generate_separators(image_dir: str, image_ext: str, output_dir: str, mo
             image_err_list.append(str(image))
 
     # Save the list of files we'eve generated during this round to a file
-    output_file_list_path = Path(output_dir).joinpath(OUTPUT_LIST_FILE_NAME)
     output_file_err_list_path = Path(output_dir).joinpath(OUTPUT_ERR_LIST_FILE_NAME)
-    with open(output_file_list_path, 'w') as file:
-        for line in image_success_list:
-            file.write(f'{line}\n')
     with open(output_file_err_list_path, 'w') as file:
         for line in image_err_list:
             file.write(f'{line}\n')
-    print(f'saved output file list to: {output_file_list_path} ')
     print(f'saved error output file list to: {output_file_err_list_path} ')
     return labeled_image_count
