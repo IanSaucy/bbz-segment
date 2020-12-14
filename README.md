@@ -1,3 +1,17 @@
+# Overview
+
+This repository is a fork of the original code as described below. 
+The main additions revolve around the documentation of the `05_prediction` module. 
+Some refactoring has also taken place in that module to aid in development. 
+
+Lastly, a Pipfile was added to help handle the very specific dependency versions required to
+run this solution.
+
+## General Requirements
+
+Specifics are in the Pipfile but the main thing that is required is `tensorflow==1.15.2`.
+Due to another bug described [here](https://github.com/tensorflow/tensorflow/issues/44467) this also requires a version of `h5py<3.0.0`.
+
 # bbz-segment
 This repository contains code and data for the paper <a href="http://arxiv.org/abs/2004.07317">An Evaluation of DNN Architectures for Page Segmentation of Historical Newspapers</a>:
 
